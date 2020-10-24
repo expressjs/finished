@@ -22,6 +22,12 @@ module.exports.isFinished = isFinished
 
 var first = require('ee-first')
 
+var asyncHooks
+try {
+  asyncHooks = require('async_hooks')
+} catch (ignored) {
+}
+
 /**
  * Variables.
  * @private
@@ -43,6 +49,7 @@ var defer = typeof setImmediate === 'function'
  */
 
 function onFinished (msg, listener) {
+  listener = preserveAsyncContext('OnFinishedListener', listener)
   if (isFinished(msg) !== false) {
     defer(listener, null, msg)
     return msg
@@ -194,4 +201,12 @@ function patchAssignSocket (res, callback) {
     assignSocket.call(this, socket)
     callback(socket)
   }
+}
+
+function preserveAsyncContext (asyncResourceType, fn) {
+  if (!asyncHooks) {
+    return fn
+  }
+  var asyncResource = new asyncHooks.AsyncResource(asyncResourceType)
+  return asyncResource.runInAsyncScope.bind(asyncResource, fn, null)
 }

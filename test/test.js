@@ -4,6 +4,13 @@ var http = require('http')
 var net = require('net')
 var onFinished = require('..')
 
+var describeWhenAsyncHooksAreSupported = describe.skip
+try {
+  var asyncHooks = require('async_hooks')
+  describeWhenAsyncHooksAreSupported = typeof asyncHooks.AsyncLocalStorage === 'function' ? describe : describe.skip
+} catch (ignored) {
+}
+
 describe('onFinished(res, listener)', function () {
   it('should invoke listener given an unknown object', function (done) {
     onFinished({}, done)
@@ -36,6 +43,27 @@ describe('onFinished(res, listener)', function () {
       var server = http.createServer(function (req, res) {
         onFinished(res, function () {
           onFinished(res, done)
+        })
+        setTimeout(res.end.bind(res), 0)
+      })
+
+      sendGet(server)
+    })
+  })
+
+  describeWhenAsyncHooksAreSupported('when used with async hooks', function () {
+    it('should maintain async context', function (done) {
+      var asyncLocalStorage = new asyncHooks.AsyncLocalStorage()
+      var store = {
+        contextMaintained: true
+      }
+
+      var server = http.createServer(function (req, res) {
+        asyncLocalStorage.run(store, function () {
+          onFinished(res, function () {
+            assert.strictEqual(asyncLocalStorage.getStore(), store)
+            done()
+          })
         })
         setTimeout(res.end.bind(res), 0)
       })
